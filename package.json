@@ -92,6 +92,11 @@
                     "light": "./assets/ToggleLock.png",
                     "dark": "./assets/ToggleLock_inverse.png"
                 }
+            },
+            {
+                "command": "pythonVisualizer.showPlotOutput",
+                "title": "%pythonVisualizer.showPlotOutput.title%",
+                "category": "Python Visualizer"
             }
         ],
         "menus": {
@@ -123,6 +128,18 @@
                     "command": "pythonVisualizer.showVisualizerToSide",
                     "when": "resourceLangId == python",
                     "group": "navigation"
+                },
+                {
+                    "command": "pythonVisualizer.showPlotOutput",
+                    "when": "resourceLangId == python",
+                    "group": "navigation"
+                }
+            ],
+            "editor/context": [
+                {
+                    "command": "pythonVisualizer.showPlotOutput",
+                    "when": "editorLangId == python",
+                    "group": "pythonVisualizer"
                 }
             ],
             "commandPalette": [
@@ -149,6 +166,10 @@
                 {
                     "command": "pythonVisualizer.toggleLock",
                     "when": "pythonVisualizerFocus"
+                },
+                {
+                    "command": "pythonVisualizer.showPlotOutput",
+                    "when": "editorLangId == python"
                 }
             ]
         },

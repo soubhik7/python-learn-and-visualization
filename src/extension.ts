@@ -20,6 +20,7 @@ export function activate(context: vscode.ExtensionContext) {
     commandManager.register(new commands.ShowSourceCommand(visualizerManager));
     commandManager.register(new commands.RefreshVisualizerCommand(visualizerManager));
     commandManager.register(new commands.ToggleLockCommand(visualizerManager));
+    commandManager.register(new commands.ShowPlotOutputCommand(context));
 
     context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(() => {
         logger.updateConfiguration();

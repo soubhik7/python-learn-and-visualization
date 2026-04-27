@@ -7,6 +7,7 @@
     "pythonVisualizer.showSource.title": "Show Source",
     "pythonVisualizer.refresh.title": "Refresh Visualizer",
     "pythonVisualizer.toggleLock.title": "Toggle Visualizer Locking",
+    "pythonVisualizer.showPlotOutput.title": "Run and Show Plots",
     "pythonVisualizer.disableHeapNesting.desc": "Set how heap objects should be rendered. \"true\" render all heap objects at the top level. Otherwise, nest heap objects.",
     "pythonVisualizer.pythonPath.desc": "Case 1: \"official VS Code Python extension\" is installed (recommended):\n\nWhen you have the \"official VS Code Python extension\" installed, this extension seamlessly adopts its pythonPath.\n\nCase 2: \"official VS Code Python extension\" is not installed:\n\nIf you wish to set up a specific pythonPath, configuring it in Python Visualizer's settings is easy. Just type the absolute path to your desired Python executable in the field below. If you leave the \"pythonPath\" field empty in Python Visualizer's settings, the extension will automatically apply defaults based on your platform. On Windows, it will use the \"py\" command. On other platforms, it will use \"python3\".",
     "pythonVisualizer.envFile.desc": "Specify the full path to a file containing environment variable definitions. If left blank and the official VS Code Python extension is installed, the value will be retrieved from the official extension's settings. If the official Python extension is not installed, the default path will be ${workspaceFolder}/.env.",

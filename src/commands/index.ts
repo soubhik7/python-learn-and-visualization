@@ -2,3 +2,4 @@ export { ShowVisualizerCommand, ShowVisualizerToSideCommand, ShowLockedVisualize
 export { ShowSourceCommand } from './showSource';
 export { RefreshVisualizerCommand } from './refreshVisualizer';
 export { ToggleLockCommand } from './toggleLock';
+export { ShowPlotOutputCommand } from './showPlotOutput';
