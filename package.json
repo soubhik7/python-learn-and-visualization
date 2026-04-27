@@ -34,7 +34,8 @@
         "preview"
     ],
     "activationEvents": [
-        "onWebviewPanel:pythonVisualizer"
+        "onWebviewPanel:pythonVisualizer",
+        "onLanguage:python"
     ],
     "main": "./out/extension",
     "contributes": {
@@ -193,7 +194,7 @@
             "properties": {
                 "pythonVisualizer.disableHeapNesting": {
                     "type": "boolean",
-                    "default": false,
+                    "default": true,
                     "description": "%pythonVisualizer.disableHeapNesting.desc%",
                     "scope": "resource"
                 },

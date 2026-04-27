@@ -55,11 +55,11 @@ export var lightOrange = '#f48771'; // light Orange
 // var errorColor = brightRed;
 // var breakpointColor = brightRed;
 
-var connectorBaseColor = mdPurple;
-var connectorHighlightColor = mdTeal;
-var connectorInactiveColor = '#cccccc';
+var connectorBaseColor = '#0078ff'; // vibrant blue for active
+var connectorHighlightColor = '#0078ff';
+var connectorInactiveColor = '#cccccc'; // light gray for visited
 var errorColor = lightOrange;
-var breakpointColor = mdPurple;
+var breakpointColor = '#0078ff';
 
 // Unicode arrow types: '\u21d2', '\u21f0', '\u2907'
 // export var darkArrowColor = brightRed;
@@ -178,6 +178,9 @@ export class ExecutionVisualizer {
   instrLimitReachedWarningMsg: string;
 
   hasRendered: boolean = false;
+
+  // accumulates every source line number that has been executed up to curInstr
+  visitedLines: Set<number> = new Set<number>();
 
   visualizerID: number;
 
@@ -687,6 +690,12 @@ export class ExecutionVisualizer {
 
   // This function is called every time the display needs to be updated
   updateOutput(smoothTransition=false) {
+    // accumulate visited source lines (history is never cleared, even when stepping back)
+    const stepLine = this.curTrace[this.curInstr] && this.curTrace[this.curInstr].line;
+    if (stepLine !== undefined) {
+      this.visitedLines.add(stepLine);
+    }
+
     if (this.params.hideCode) {
       this.updateOutputMini();
     }
@@ -1179,7 +1188,10 @@ class DataVisualizer {
            <tr>
              <td id="stack_td">
                <div id="globals_area">
-                 <div id="stackHeader">${this.getRealLabel("Frames")}</div>
+                 <div id="stackHeader">
+                   <span>${this.getRealLabel("Frames")}</span>
+                   <button id="pvCollapseZombiesBtn" class="pvControlBtn" title="Collapse/expand returned frames">&#8597;</button>
+                 </div>
                </div>
                <div id="stack"></div>
              </td>
@@ -1193,6 +1205,17 @@ class DataVisualizer {
        </div>`;
 
     this.domRoot.append(codeVizHTML);
+
+    // Delegated click: toggle individual zombie frame expand/collapse
+    this.domRoot.on('click', 'div.zombieStackFrame > .stackFrameHeader', function() {
+      $(this).parent().toggleClass('pvExpanded');
+    });
+
+    // Collapse/expand all zombie frames at once
+    this.domRoot.on('click', '#pvCollapseZombiesBtn', function() {
+      var anyExpanded = myViz.domRoot.find('div.zombieStackFrame.pvExpanded').length > 0;
+      myViz.domRoot.find('div.zombieStackFrame').toggleClass('pvExpanded', !anyExpanded);
+    });
 
     // create a persistent globals frame
     // (note that we need to keep #globals_area separate from #stack for d3 to work its magic)
@@ -1848,15 +1871,9 @@ class DataVisualizer {
     // use d3 to render the heap by mapping curToplevelLayout into <table class="heapRow">
     // and <td class="toplevelHeapObject"> elements
 
-    // for simplicity, CLEAR this entire div every time, which totally
-    // gets rid of the incremental benefits of using d3 for, say,
-    // transitions or efficient updates. but it provides more
-    // deterministic and predictable output for other functions. sigh, i'm
-    // not really using d3 to the fullest, but oh wells!
-    myViz.domRoot.find('#heap')
-      .empty()
-      .html(`<div id="heapHeader">${myViz.getRealLabel("Objects")}</div>`);
-
+    if (myViz.domRoot.find('#heapHeader').length === 0) {
+      myViz.domRoot.find('#heap').append(`<div id="heapHeader">${myViz.getRealLabel("Objects")}</div>`);
+    }
 
     var heapRows = myViz.domRootD3.select('#heap')
       .selectAll('table.heapRow')
@@ -1904,8 +1921,9 @@ class DataVisualizer {
         //console.log('NEW/UPDATE ELT', objID);
 
         // TODO: add a smoother transition in the future
-        // Right now, just delete the old element and render a new one in its place
-        $(this).empty();
+        // We preserve the wrapper to keep jsPlumb endpoints intact
+        var heapObjID = myViz.generateHeapObjID(objID, curInstr);
+        $(this).children(':not(#' + heapObjID + ')').remove();
 
         if (myViz.isCppMode()) {
           // TODO: why might this be undefined?!? because the object
@@ -2016,15 +2034,12 @@ class DataVisualizer {
           $(this).html(varname);
         }
         else {
-          // always delete and re-render the global var ...
-          // NB: trying to cache and compare the old value using,
-          // say -- $(this).attr('data-curvalue', valStringRepr) -- leads to
-          // a mysterious and killer memory leak that I can't figure out yet
-          $(this).empty();
-
           // make sure varname doesn't contain any weird
           // characters that are illegal for CSS ID's ...
           var varDivID = myViz.owner.generateID('global__' + varnameToCssID(varname));
+
+          // preserve the stack pointer so jsPlumb doesn't lose it
+          $(this).children(':not(#' + varDivID + ')').remove();
 
           // need to get rid of the old connector in preparation for rendering a new one:
           existingConnectionEndpointIDs.remove(varDivID);
@@ -2056,7 +2071,9 @@ class DataVisualizer {
               // add a stub so that we can connect it with a connector later.
               // IE needs this div to be NON-EMPTY in order to properly
               // render jsPlumb endpoints, so that's why we add an "&nbsp;"!
-              $(this).append('<div class="stack_pointer" id="' + varDivID + '">&nbsp;</div>');
+              if ($(this).find('#' + varDivID).length === 0) {
+                $(this).append('<div class="stack_pointer" id="' + varDivID + '">&nbsp;</div>');
+              }
 
               assert(!myViz.jsPlumbManager.connectionEndpointIDs.has(varDivID));
               myViz.jsPlumbManager.connectionEndpointIDs.set(varDivID, heapObjID);
@@ -2192,6 +2209,9 @@ class DataVisualizer {
           headerLabel = headerLabel + ' [parent=Global]';
         }
 
+        if (frame.is_zombie) {
+          return '<span class="pvZombieToggle"></span>' + headerLabel;
+        }
         return headerLabel;
       });
 
@@ -2248,15 +2268,12 @@ class DataVisualizer {
             $(this).html(varname);
         }
         else {
-          // always delete and re-render the stack var ...
-          // NB: trying to cache and compare the old value using,
-          // say -- $(this).attr('data-curvalue', valStringRepr) -- leads to
-          // a mysterious and killer memory leak that I can't figure out yet
-          $(this).empty();
-
           // make sure varname and frame.unique_hash don't contain any weird
           // characters that are illegal for CSS ID's ...
           var varDivID = myViz.owner.generateID(varnameToCssID(frame.unique_hash + '__' + varname));
+
+          // preserve the stack pointer
+          $(this).children(':not(#' + varDivID + ')').remove();
 
           // need to get rid of the old connector in preparation for rendering a new one:
           existingConnectionEndpointIDs.remove(varDivID);
@@ -2287,7 +2304,9 @@ class DataVisualizer {
               // add a stub so that we can connect it with a connector later.
               // IE needs this div to be NON-EMPTY in order to properly
               // render jsPlumb endpoints, so that's why we add an "&nbsp;"!
-              $(this).append('<div class="stack_pointer" id="' + varDivID + '">&nbsp;</div>');
+              if ($(this).find('#' + varDivID).length === 0) {
+                $(this).append('<div class="stack_pointer" id="' + varDivID + '">&nbsp;</div>');
+              }
 
               assert(!myViz.jsPlumbManager.connectionEndpointIDs.has(varDivID));
               myViz.jsPlumbManager.connectionEndpointIDs.set(varDivID, heapObjID);
@@ -2438,17 +2457,8 @@ class DataVisualizer {
     // NB: ugh, I'm not very happy about this hack, but it seems necessary
     // for embedding within sophisticated webpages such as IPython Notebook
 
-    // delete all connectors. do this AS LATE AS POSSIBLE so that
-    // (presumably) the calls to $(this).empty() earlier in this function
-    // will properly garbage collect the connectors
-    //
-    // WARNING: for environment parent pointers, garbage collection doesn't seem to
-    // be working as intended :(
-    //
-    // I suspect that this is due to the fact that parent pointers are SIBLINGS
-    // of stackFrame divs and not children, so when stackFrame divs get destroyed,
-    // their associated parent pointers do NOT.)
-    myViz.jsPlumbInstance.reset();
+    // DO NOT reset jsPlumb so that existing connections can persist and transition!
+    // myViz.jsPlumbInstance.reset();
 
 
     // use jsPlumb scopes to keep the different kinds of pointers separated
@@ -2496,20 +2506,32 @@ class DataVisualizer {
     }
 
     if (!myViz.params.textualMemoryLabels) {
-      // re-render existing connectors and then ...
-      //
-      // NB: in C/C++ mode, to keep things simple, don't try to redraw
-      // existingConnectionEndpointIDs since we want to redraw all arrows
-      // each and every time.
-      if (!myViz.isCppMode()) {
-        existingConnectionEndpointIDs.forEach(renderVarValueConnector);
+      if (myViz.isCppMode()) {
+          // C/C++ mode redraws everything.
+          existingConnectionEndpointIDs.forEach(function(targetID, sourceID) {
+              myViz.jsPlumbInstance.select({source: sourceID, scope: 'varValuePointer'}).detach();
+              renderVarValueConnector(sourceID, targetID);
+          });
+      } else {
+          // Existing connections that were NOT touched are left alone!
+          // We only detach and re-render the NEW or MODIFIED ones.
       }
-      // add all the NEW connectors that have arisen in this call to renderDataStructures
-      myViz.jsPlumbManager.connectionEndpointIDs.forEach(renderVarValueConnector);
+      
+      myViz.jsPlumbManager.connectionEndpointIDs.forEach(function(targetID, sourceID) {
+          myViz.jsPlumbInstance.select({source: sourceID, scope: 'varValuePointer'}).detach();
+          renderVarValueConnector(sourceID, targetID);
+      });
     }
+
+    // heap->heap pointers are redrawn every time
+    myViz.jsPlumbManager.heapConnectionEndpointIDs.forEach(function(targetID, sourceID) {
+        myViz.jsPlumbInstance.select({source: sourceID, scope: 'varValuePointer'}).detach();
+        renderVarValueConnector(sourceID, targetID);
+    });
+
     // do the same for environment parent pointers
     if (myViz.params.drawParentPointers) {
-      existingParentPointerConnectionEndpointIDs.forEach(renderParentPointerConnector);
+      myViz.jsPlumbInstance.select({scope: 'frameParentPointer'}).detach();
       myViz.jsPlumbManager.parentPointerConnectionEndpointIDs.forEach(renderParentPointerConnector);
     }
 
@@ -2528,8 +2550,8 @@ class DataVisualizer {
 
         // if this connector starts in the selected stack frame ...
         if (stackFrameDiv.attr('id') == frameID) {
-          // then HIGHLIGHT IT!
-          c.setPaintStyle({lineWidth:1, strokeStyle: connectorBaseColor});
+          // then HIGHLIGHT IT! (Bold/Blue glow effect)
+          c.setPaintStyle({lineWidth:2, strokeStyle: connectorBaseColor, outlineWidth:2, outlineColor:'rgba(0, 120, 255, 0.3)'});
           c.endpoints[0].setPaintStyle({fillStyle: connectorBaseColor});
           //c.endpoints[1].setVisible(false, true, true); // JUST set right endpoint to be invisible
 
@@ -2537,7 +2559,9 @@ class DataVisualizer {
         }
         // for heap->heap connectors
         else if (myViz.jsPlumbManager.heapConnectionEndpointIDs.has(c.endpoints[0].elementId)) {
-          // NOP since it's already the color and style we set by default
+          // Inactive/Traversed pointers are light gray
+          c.setPaintStyle({lineWidth:1, strokeStyle: connectorInactiveColor});
+          c.endpoints[0].setPaintStyle({fillStyle: connectorInactiveColor});
         }
         // TODO: maybe this needs special consideration for C/C++ code? dunno
         else if (stackFrameDiv.length > 0) {
@@ -2572,6 +2596,65 @@ class DataVisualizer {
     if (!frame_already_highlighted) {
       highlight_frame(myViz.owner.generateID('globals'));
     }
+
+    // ── Visual state enhancement: active / new heap objects ──────────────────
+    // clear previous states
+    myViz.domRoot.find('td.toplevelHeapObject').removeClass('activeHeapObj newHeapObj');
+
+    // collect heap keys from the previous step to detect newly created objects
+    var prevHeapKeySet = new Set<string>();
+    if (curInstr > 0 && myViz.curTrace[curInstr - 1]) {
+      Object.keys(myViz.curTrace[curInstr - 1].heap || {}).forEach(function(k) {
+        prevHeapKeySet.add(k);
+      });
+    }
+
+    // mark heap objects that are directly referenced by the active (highlighted) frame
+    $.each(curEntry.stack_to_render, function(_i, frame) {
+      if (frame.is_highlighted) {
+        $.each(frame.ordered_varnames, function(_j, varname) {
+          var val = frame.encoded_locals[varname];
+          if (val && !myViz.isPrimitiveType(val)) {
+            var heapID = getRefID(val);
+            var heapObjID = myViz.generateHeapObjID(heapID, curInstr);
+            myViz.domRoot.find('#' + heapObjID).closest('td.toplevelHeapObject').addClass('activeHeapObj');
+          }
+        });
+      }
+    });
+    // also mark globals-referenced objects when no stack frames exist
+    if (curEntry.stack_to_render.length === 0) {
+      $.each(curEntry.ordered_globals, function(_i, varname) {
+        var val = curEntry.globals[varname];
+        if (val && !myViz.isPrimitiveType(val)) {
+          var heapID = getRefID(val);
+          var heapObjID = myViz.generateHeapObjID(heapID, curInstr);
+          myViz.domRoot.find('#' + heapObjID).closest('td.toplevelHeapObject').addClass('activeHeapObj');
+        }
+      });
+    }
+
+    // mark heap objects that are brand-new at this step
+    $.each(curEntry.heap, function(id, _obj) {
+      if (!prevHeapKeySet.has(String(id))) {
+        var heapObjID = myViz.generateHeapObjID(Number(id), curInstr);
+        myViz.domRoot.find('#' + heapObjID).closest('td.toplevelHeapObject').addClass('newHeapObj');
+      }
+    });
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // Repaint jsPlumb continuously for 300ms to smoothly animate arrows alongside CSS transitions
+    if (myViz.jsPlumbManager.repaintInterval) {
+        clearInterval(myViz.jsPlumbManager.repaintInterval);
+    }
+    myViz.jsPlumbManager.repaintInterval = setInterval(function() {
+        myViz.jsPlumbInstance.repaintEverything();
+    }, 20); // 50fps
+    
+    setTimeout(function() {
+        clearInterval(myViz.jsPlumbManager.repaintInterval);
+        myViz.jsPlumbInstance.repaintEverything(); // final paint
+    }, 300);
 
     myViz.owner.try_hook("end_renderDataStructures", {myViz:myViz.owner /* tricky! use owner to be safe */});
   }
@@ -2779,8 +2862,14 @@ class DataVisualizer {
 
     // wrap ALL compound objects in a heapObject div so that jsPlumb
     // connectors can point to it:
-    d3DomElement.append('<div class="heapObject" id="' + heapObjID + '"></div>');
-    d3DomElement = myViz.domRoot.find('#' + heapObjID); // TODO: maybe inefficient
+    var existingHeapObj = d3DomElement.find('#' + heapObjID);
+    if (existingHeapObj.length === 0) {
+      d3DomElement.append('<div class="heapObject" id="' + heapObjID + '"></div>');
+      d3DomElement = myViz.domRoot.find('#' + heapObjID); // TODO: maybe inefficient
+    } else {
+      existingHeapObj.empty(); // preserve the wrapper itself!
+      d3DomElement = existingHeapObj;
+    }
 
     myViz.jsPlumbManager.renderedHeapObjectIDs.set(heapObjID, 1);
 
@@ -3675,6 +3764,18 @@ class CodeDisplay {
     if (!isOutputLineVisible(curEntry.line)) {
       scrollCodeOutputToLine(curEntry.line);
     }
+
+    // apply currentLine / visitedLine CSS classes for visual state tracking
+    myViz.codeOutputLines.forEach((line) => {
+      const lineNum = line.lineNumber;
+      const $tr = this.domRoot.find('#lineNo' + lineNum).closest('tr');
+      $tr.removeClass('currentLine visitedLine');
+      if (lineNum === myViz.curLineNumber) {
+        $tr.addClass('currentLine');
+      } else if (myViz.visitedLines && myViz.visitedLines.has(lineNum)) {
+        $tr.addClass('visitedLine');
+      }
+    });
   }
 
 } // END class CodeDisplay
@@ -3714,6 +3815,7 @@ class NavigationController {
                      <button id="jmpStepBack", type="button" style="margin-left: 10px; margin-right: 10px;">&lt; Back</button>\
                      <button id="jmpStepFwd", type="button" style="margin-left: 10px; margin-right: 10px;">Forward &gt;</button>\
                      <button id="jmpLastInstr", type="button" style="margin-left: 10px; margin-right: 10px;">Last &gt;&gt;</button>\
+                     <button id="toggleNestingBtn", type="button" style="margin-left: 10px; margin-right: 10px;">Toggle Nesting</button>\
                      <span id="curInstr" style="margin-left: 10px; margin-right: 10px; display: block;">Step ? of ?</span>\
                    </div>\
                    <div id="errorOutput" style="word-wrap: break-word; word-break: normal;"/>\
@@ -3725,6 +3827,18 @@ class NavigationController {
     this.domRoot.find("#jmpLastInstr").click(() => {this.owner.renderStep(this.nSteps - 1);});
     this.domRoot.find("#jmpStepBack").click(() => {this.owner.stepBack();});
     this.domRoot.find("#jmpStepFwd").click(() => {this.owner.stepForward();});
+    this.domRoot.find("#toggleNestingBtn").click(() => {
+        this.owner.params.disableHeapNesting = !this.owner.params.disableHeapNesting;
+        // Force a full clean re-render to apply the layout mode change
+        this.owner.domRoot.find('#heap').empty();
+        this.owner.domRoot.find('#stack').empty();
+        this.owner.domRoot.find('#globals_area').empty();
+        this.owner.jsPlumbInstance.reset();
+        this.owner.jsPlumbManager.connectionEndpointIDs.clear();
+        this.owner.jsPlumbManager.heapConnectionEndpointIDs.clear();
+        this.owner.jsPlumbManager.renderedHeapObjectIDs.clear();
+        this.owner.renderStep(this.owner.curInstr);
+    });
 
     // disable controls initially ...
     this.domRoot.find("#vcrControls #jmpFirstInstr").attr("disabled", true);

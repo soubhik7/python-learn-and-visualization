@@ -1,4 +1,4 @@
-.gitattributes   
+.gitattributes
 .gitignore
 .testignore
 gulpfile.js
@@ -18,3 +18,9 @@ python-visualizer/**
 pythonFiles/pydev/__pycache__/**
 src/**
 testExtension/**
+
+# Exclude all node_modules (gitignored), then re-include production deps
+node_modules/**
+!node_modules/python-shell/**
+!node_modules/tree-kill/**
+!node_modules/uint64be/**

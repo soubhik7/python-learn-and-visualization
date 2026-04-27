@@ -262,7 +262,7 @@ export class PythonVisualizer {
             this._codAndNavWidth = config.contentConfig.codAndNavWidth;
         }
         const options = {
-            jumpToEnd: true,
+            jumpToEnd: false,
             startingInstruction: undefined,
             disableHeapNesting: config.contentConfig.disableHeapNesting,
             textualMemoryLabels: config.contentConfig.textualMemoryLabels,
