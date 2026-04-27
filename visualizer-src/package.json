@@ -12,6 +12,8 @@
     "author": "",
     "license": "BSD-3-Clause",
     "devDependencies": {
+        "@types/d3": "^7.4.3",
+        "@types/jquery": "^4.0.0",
         "clean-webpack-plugin": "^4.0.0",
         "ts-loader": "^9.4.4",
         "typescript": "^5.1.3",

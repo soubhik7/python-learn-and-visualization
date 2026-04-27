@@ -2,7 +2,7 @@
 
 Experience a new dimension of coding with the "Python Visualizer" extension for [Visual Studio Code](https://code.visualstudio.com/). This extension introduces interactive visualization of Python code execution for the [Python language](https://www.python.org/).
 
-**IMPORTANT:** This extension is currently compatible with **Python 3.11, 3.10, and earlier Python 3.x versions**. It **does NOT work with Python 3.12 or later**.
+**IMPORTANT:** This extension is compatible with **Python 3.x**, including Python 3.12, 3.13, 3.14, and later versions.
 
 # NOTES: 
 

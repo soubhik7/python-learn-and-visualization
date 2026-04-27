@@ -401,37 +401,41 @@ class ObjectEncoder:
           if k not in ('__module__', '__return__', '__locals__'):
             new_obj.append([self.encode(k, get_parent), self.encode(v, get_parent)])
       elif typ in (types.FunctionType, types.MethodType):
+        printed_args = []
+        default_arg_names_and_vals = []
+
         if is_python3:
-          argspec = inspect.getfullargspec(dat)
+          try:
+            sig = inspect.signature(dat)
+            for param_name, param in sig.parameters.items():
+              if param.kind in (inspect.Parameter.POSITIONAL_ONLY,
+                                inspect.Parameter.POSITIONAL_OR_KEYWORD):
+                printed_args.append(param_name)
+                if param.default is not inspect.Parameter.empty:
+                  default_arg_names_and_vals.append(
+                    (param_name, self.encode(param.default, get_parent)))
+              elif param.kind == inspect.Parameter.VAR_POSITIONAL:
+                printed_args.append('*' + param_name)
+              elif param.kind == inspect.Parameter.KEYWORD_ONLY:
+                printed_args.append(param_name)
+                if param.default is not inspect.Parameter.empty:
+                  default_arg_names_and_vals.append(
+                    (param_name, self.encode(param.default, get_parent)))
+              elif param.kind == inspect.Parameter.VAR_KEYWORD:
+                printed_args.append('**' + param_name)
+          except (ValueError, TypeError):
+            pass
         else:
           argspec = inspect.getargspec(dat)
-
-        printed_args = [e for e in argspec.args]
-
-        default_arg_names_and_vals = []
-        if argspec.defaults:
+          printed_args = [e for e in argspec.args]
+          if argspec.defaults:
             num_missing_defaults = len(printed_args) - len(argspec.defaults)
             assert num_missing_defaults >= 0
-            # tricky tricky tricky how default positional arguments work!
             for i in range(num_missing_defaults, len(printed_args)):
-                default_arg_names_and_vals.append((printed_args[i], self.encode(argspec.defaults[i-num_missing_defaults], get_parent)))
-
-        if argspec.varargs:
-          printed_args.append('*' + argspec.varargs)
-
-        if is_python3:
-          # kwonlyargs come before varkw
-          if argspec.kwonlyargs:
-            printed_args.extend(argspec.kwonlyargs)
-            if argspec.kwonlydefaults:
-              # iterate in order of appearance in kwonlyargs
-              for varname in argspec.kwonlyargs:
-                if varname in argspec.kwonlydefaults:
-                  val = argspec.kwonlydefaults[varname]
-                  default_arg_names_and_vals.append((varname, self.encode(val, get_parent)))
-          if argspec.varkw:
-            printed_args.append('**' + argspec.varkw)
-        else:
+              default_arg_names_and_vals.append(
+                (printed_args[i], self.encode(argspec.defaults[i-num_missing_defaults], get_parent)))
+          if argspec.varargs:
+            printed_args.append('*' + argspec.varargs)
           if argspec.keywords:
             printed_args.append('**' + argspec.keywords)
 

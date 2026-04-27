@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(./node_modules/.bin/tsc -p ./)",
+      "Bash(/opt/homebrew/bin/python3 --version)",
+      "Bash(/opt/homebrew/bin/python3 -c \"import sys; sys.path.insert\\(0, 'pythonFiles/pydev'\\); import pg_logger; print\\('pg_logger imported OK'\\)\")",
+      "Bash(/opt/homebrew/bin/python3 -c ' *)"
+    ]
+  }
+}
